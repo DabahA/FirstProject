@@ -40,6 +40,12 @@ pipeline {
                 script {
                     echo 'Starting application for testing...'
                     
+                    // Show where we are
+                    sh 'echo "Jenkins running on: $(hostname)"'
+                    sh 'echo "Current user: $(whoami)"'
+                    sh 'echo "Working directory: $(pwd)"'
+                    sh 'echo "Docker version: $(docker --version)"'
+                    
                     try {
                         // Create a test network
                         sh 'docker network create flask-test-network || true'
