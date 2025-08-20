@@ -83,8 +83,7 @@ pipeline {
                         
                     } catch (Exception e) {
                         echo "Test failed: ${e.getMessage()}"
-                    } finally {
-                        // Cleanup containers
+                        // Cleanup only on test failure
                         sh 'docker stop flask-test-app nginx-test-proxy || true'
                         sh 'docker rm flask-test-app nginx-test-proxy || true'
                         sh 'docker network rm flask-test-network || true'
@@ -117,19 +116,18 @@ pipeline {
     }
     
     post {
-        always {
-            // Cleanup containers and images
-            sh 'docker stop flask-test-app nginx-test-proxy || true'
-            sh 'docker rm flask-test-app nginx-test-proxy || true'
-            sh 'docker network rm flask-test-network || true'
-            sh "docker rmi ${FLASK_IMAGE}:${BUILD_NUMBER} || true"
-            sh "docker rmi ${NGINX_IMAGE}:${BUILD_NUMBER} || true"
-        }
         success {
             echo '✅ Pipeline completed successfully!'
+            echo '🐳 Docker containers are still running:'
+            echo '   - Flask app: http://localhost:5000'
+            echo '   - Nginx proxy: http://localhost:8080'
         }
         failure {
             echo '❌ Pipeline failed!'
+            // Only cleanup on failure
+            sh 'docker stop flask-test-app nginx-test-proxy || true'
+            sh 'docker rm flask-test-app nginx-test-proxy || true'
+            sh 'docker network rm flask-test-network || true'
         }
     }
 }
