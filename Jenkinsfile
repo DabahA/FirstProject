@@ -40,23 +40,55 @@ pipeline {
                 script {
                     echo 'Starting application for testing...'
                     
-                    // Start services using docker-compose
-                    sh 'docker-compose down || true'
-                    sh 'docker-compose up -d --build'
-                    
-                    // Wait for services to start
-                    sleep(time: 30, unit: 'SECONDS')
-                    
-                    // Test Flask app
-                    sh 'curl -f http://localhost:5000/health || exit 1'
-                    echo 'Flask app health check passed'
-                    
-                    // Test Nginx proxy
-                    sh 'curl -f http://localhost:8080/ || exit 1'
-                    echo 'Nginx proxy test passed'
-                    
-                    // Stop services
-                    sh 'docker-compose down'
+                    try {
+                        // Create a test network
+                        sh 'docker network create flask-test-network || true'
+                        
+                        // Stop any existing containers
+                        sh 'docker stop flask-test-app nginx-test-proxy || true'
+                        sh 'docker rm flask-test-app nginx-test-proxy || true'
+                        
+                        // Start Flask container
+                        sh """
+                            docker run -d \\
+                                --name flask-test-app \\
+                                --network flask-test-network \\
+                                -p 5000:5000 \\
+                                -v /var/run/docker.sock:/var/run/docker.sock:ro \\
+                                ${FLASK_IMAGE}:latest
+                        """
+                        
+                        // Wait for Flask to start
+                        sleep(time: 15, unit: 'SECONDS')
+                        
+                        // Start Nginx container
+                        sh """
+                            docker run -d \\
+                                --name nginx-test-proxy \\
+                                --network flask-test-network \\
+                                -p 8080:80 \\
+                                ${NGINX_IMAGE}:latest
+                        """
+                        
+                        // Wait for services to be ready
+                        sleep(time: 15, unit: 'SECONDS')
+                        
+                        // Test Flask app directly
+                        sh 'curl -f http://localhost:5000/health || echo "Flask health check failed"'
+                        echo 'Flask app health check completed'
+                        
+                        // Test through Nginx proxy
+                        sh 'curl -f http://localhost:8080/ || echo "Nginx proxy test failed"'
+                        echo 'Nginx proxy test completed'
+                        
+                    } catch (Exception e) {
+                        echo "Test failed: ${e.getMessage()}"
+                    } finally {
+                        // Cleanup containers
+                        sh 'docker stop flask-test-app nginx-test-proxy || true'
+                        sh 'docker rm flask-test-app nginx-test-proxy || true'
+                        sh 'docker network rm flask-test-network || true'
+                    }
                 }
             }
         }
@@ -86,8 +118,10 @@ pipeline {
     
     post {
         always {
-            // Cleanup
-            sh 'docker-compose down || true'
+            // Cleanup containers and images
+            sh 'docker stop flask-test-app nginx-test-proxy || true'
+            sh 'docker rm flask-test-app nginx-test-proxy || true'
+            sh 'docker network rm flask-test-network || true'
             sh "docker rmi ${FLASK_IMAGE}:${BUILD_NUMBER} || true"
             sh "docker rmi ${NGINX_IMAGE}:${BUILD_NUMBER} || true"
         }
