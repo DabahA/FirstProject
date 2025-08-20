@@ -67,12 +67,12 @@ pipeline {
                         // Wait for Flask to start
                         sleep(time: 15, unit: 'SECONDS')
                         
-                        // Start Nginx container
+                        // Start Nginx container (using port 8081 to avoid Jenkins conflict)
                         sh """
                             docker run -d \\
                                 --name nginx-test-proxy \\
                                 --network flask-test-network \\
-                                -p 8080:80 \\
+                                -p 8081:80 \\
                                 ${NGINX_IMAGE}:latest
                         """
                         
@@ -84,7 +84,7 @@ pipeline {
                         echo 'Flask app health check completed'
                         
                         // Test through Nginx proxy
-                        sh 'curl -f http://localhost:8080/ || echo "Nginx proxy test failed"'
+                        sh 'curl -f http://localhost:8081/ || echo "Nginx proxy test failed"'
                         echo 'Nginx proxy test completed'
                         
                     } catch (Exception e) {
@@ -126,7 +126,8 @@ pipeline {
             echo '✅ Pipeline completed successfully!'
             echo '🐳 Docker containers are still running:'
             echo '   - Flask app: http://localhost:5000'
-            echo '   - Nginx proxy: http://localhost:8080'
+            echo '   - Nginx proxy: http://localhost:8081'
+            echo '   - Jenkins: http://localhost:8080 (unchanged)'
         }
         failure {
             echo '❌ Pipeline failed!'
